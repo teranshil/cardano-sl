@@ -89,6 +89,7 @@ test-suite test
                        Test.Pos.Binary.Cbor.CborSpec
                        Test.Pos.Binary.Helpers
                        Test.Pos.Binary.Simple
+                       Test.Pos.Binary.Indexed
                        Test.Pos.Binary.Tripping
                        Test.Pos.Cbor.RefImpl
                        Test.Pos.Cbor.Canonicity

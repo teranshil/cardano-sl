@@ -119,8 +119,21 @@ after_test:
       .\cache-s3 --max-size=$env:CACHE_S3_MAX_SIZE --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -c -v info save stack work
     }
  - xcopy /q /s /e /r /k /i /v /h /y "%WORK_DIR%\daedalus" "%APPVEYOR_BUILD_FOLDER%\daedalus"
+ - mkdir deploy
+ - dir deploy
 
 artifacts:
   - path: daedalus/
     name: CardanoSL
     type: zip
+deploy:
+  provider: S3
+  access_key_id:
+    secure: sQWt5CpaN0H+jwUVoTsrET46pADUDEcrJ5D9MHmKX0M=
+  secret_access_key:
+    secure: m5sQYd16K8HA0zoZaD0gOl4EEWUso1D51L5rp+kT3hLaIE3tt4iT+b+iW8F4F0FU
+  bucket: appveyor-ci-cache
+  region: eu-west-1
+  set_public: true
+  folder: cardano-sl
+  artifact: deploy/*.zip

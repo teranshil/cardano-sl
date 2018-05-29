@@ -39,6 +39,8 @@ let
     connectScripts.mainnetExplorer = [ "x86_64-linux" "x86_64-darwin" ];
     connectScripts.stagingWallet   = [ "x86_64-linux" "x86_64-darwin" ];
     connectScripts.stagingExplorer = [ "x86_64-linux" "x86_64-darwin" ];
+    connectScripts.testnetWallet   = [ "x86_64-linux" "x86_64-darwin" ];
+    connectScripts.testnetExplorer = [ "x86_64-linux" "x86_64-darwin" ];
     daedalus-bridge = supportedSystems;
   };
   nixosTests = import ./nixos-tests;

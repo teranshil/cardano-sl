@@ -133,12 +133,15 @@ let
       mainnetWallet = connect {};
       mainnetExplorer = connect { executable = "explorer"; };
       stagingWallet = connect { environment = "mainnet-staging"; };
-      demoWallet = connect { environment = "demo"; };
       stagingExplorer = connect { executable = "explorer"; environment = "mainnet-staging"; };
+      testnetWallet = connect { environment = "testnet"; };
+      testnetExplorer = connect { executable = "explorer"; environment = "testnet"; };
+      demoWallet = connect { environment = "demo"; };
     };
     dockerImages = {
       mainnetWallet = mkDocker { environment = "mainnet"; };
       stagingWallet = mkDocker { environment = "mainnet-staging"; };
+      testnetWallet = mkDocker { environment = "testnet"; };
     };
 
     daedalus-bridge = let

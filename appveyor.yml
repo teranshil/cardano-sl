@@ -119,12 +119,13 @@ after_test:
       .\cache-s3 --max-size=$env:CACHE_S3_MAX_SIZE --prefix=$env:APPVEYOR_PROJECT_NAME --git-branch=$env:APPVEYOR_REPO_BRANCH --suffix=windows -c -v info save stack work
     }
  - xcopy /q /s /e /r /k /i /v /h /y "%WORK_DIR%\daedalus" "%APPVEYOR_BUILD_FOLDER%\daedalus"
- - mkdir deploy
- - dir deploy
 
 artifacts:
   - path: daedalus/
     name: CardanoSL
+    type: zip
+  - path: daedalus/
+    name: "$(APPVEYOR_REPO_COMMIT)"
     type: zip
 deploy:
   provider: S3
@@ -136,4 +137,4 @@ deploy:
   region: eu-west-1
   set_public: true
   folder: cardano-sl
-  artifact: deploy/*.zip
+  artifact: "$(APPVEYOR_REPO_COMMIT)"

@@ -25,12 +25,13 @@ import           Data.Default (Default)
 import qualified Data.Time as Time
 import           Formatting (sformat, shown, (%))
 import           Mockable (Production (..))
-import           System.IO (BufferMode (..), Handle, hClose, hSetBuffering)
+import           System.IO (BufferMode (..), hClose, hSetBuffering)
 import qualified System.Metrics as Metrics
 import           System.Wlog (LoggerConfig (..), WithLogger, consoleActionB, defaultHandleAction,
                               logDebug, logInfo, maybeLogsDirB, productionB, removeAllHandlers,
                               setupLogging, showTidB)
 
+import           Network.Broadcast.OutboundQueue.Types (NodeType (..))
 import           Pos.Binary ()
 import           Pos.Block.Configuration (HasBlockConfiguration)
 import           Pos.Block.Slog (mkSlogContext)
@@ -54,6 +55,7 @@ import           Pos.Ssc (SscParams, SscState, createSscContext, mkSscState)
 import           Pos.StateLock (newStateLock)
 import           Pos.Txp (GenericTxpLocalData (..), TxpGlobalSettings, mkTxpLocalData,
                           recordTxpMetrics)
+import           Pos.Util.JsonLog.Events (JsonLogConfig (..), jsonLogConfigFromHandle)
 
 import           Pos.Launcher.Mode (InitMode, InitModeContext (..), runInitMode)
 import           Pos.Update.Context (mkUpdateContext)
@@ -74,14 +76,14 @@ import qualified System.Wlog as Logger
 
 -- | This data type contains all resources used by node.
 data NodeResources ext = NodeResources
-    { nrContext    :: !NodeContext
-    , nrDBs        :: !NodeDBs
-    , nrSscState   :: !SscState
-    , nrTxpState   :: !(GenericTxpLocalData ext)
-    , nrDlgState   :: !DelegationVar
-    , nrJLogHandle :: !(Maybe Handle)
-    -- ^ Handle for JSON logging (optional).
-    , nrEkgStore   :: !Metrics.Store
+    { nrContext       :: !NodeContext
+    , nrDBs           :: !NodeDBs
+    , nrSscState      :: !SscState
+    , nrTxpState      :: !(GenericTxpLocalData ext)
+    , nrDlgState      :: !DelegationVar
+    , nrJsonLogConfig :: !JsonLogConfig
+    -- ^ Config for optional JSON logging.
+    , nrEkgStore      :: !Metrics.Store
     }
 
 ----------------------------------------------------------------------------
@@ -148,13 +150,18 @@ allocateNodeResources np@NodeParams {..} sscnp txpSettings initDB = do
         logDebug "Created DLG var"
         sscState <- mkSscState
         logDebug "Created SSC var"
-        nrJLogHandle <-
+        jsonLogHandle <-
             case npJLFile of
                 Nothing -> pure Nothing
                 Just fp -> do
                     h <- openFile fp WriteMode
                     liftIO $ hSetBuffering h NoBuffering
                     return $ Just h
+        jsonLogConfig <- maybe
+            (pure JsonLogDisabled)
+            jsonLogConfigFromHandle
+            jsonLogHandle
+        logDebug "JSON configuration initialized"
 
         logDebug "Finished allocating node resources!"
         return NodeResources
@@ -163,16 +170,22 @@ allocateNodeResources np@NodeParams {..} sscnp txpSettings initDB = do
             , nrSscState = sscState
             , nrTxpState = txpVar
             , nrDlgState = dlgVar
+            , nrJsonLogConfig = jsonLogConfig
             , ..
             }
 
 -- | Release all resources used by node. They must be released eventually.
 releaseNodeResources ::
        NodeResources ext -> Production ()
-releaseNodeResources NodeResources {..} = do
-    whenJust nrJLogHandle (liftIO . hClose)
-    closeNodeDBs nrDBs
-    releaseNodeContext nrContext
+releaseNodeResources NodeResources {..} =
+    case nrJsonLogConfig of
+        JsonLogDisabled -> return ()
+        JsonLogConfig mVarHandle _ -> do
+            h <- takeMVar mVarHandle
+            (liftIO . hClose) h
+            putMVar mVarHandle h
+            closeNodeDBs nrDBs
+            releaseNodeContext nrContext
 
 -- | Run computation which requires 'NodeResources' ensuring that
 -- resources will be released eventually.
@@ -288,7 +301,9 @@ allocateNodeContext ancd txpSettings ekgStore = do
     peersVar <- newTVarIO mempty
     logDebug "Created peersVar"
     mm <- initializeMisbehaviorMetrics ekgStore
-
+    logDebug $ "Dequeue policy to core:  " <> (show ((ncDequeuePolicy networkConfig) NodeCore))
+    logDebug $ "Dequeue policy to relay: " <> (show ((ncDequeuePolicy networkConfig) NodeRelay))
+    logDebug $ "Dequeue policy to edge:  " <> (show ((ncDequeuePolicy networkConfig) NodeEdge))
     logDebug "Finished allocating node context!"
     let ctx =
             NodeContext

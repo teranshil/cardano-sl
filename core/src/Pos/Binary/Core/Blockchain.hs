@@ -7,13 +7,13 @@ module Pos.Binary.Core.Blockchain
        (
        ) where
 
-import           Codec.CBOR.Decoding (decodeWordCanonical)
+import           Codec.CBOR.Decoding (decodeWordCanonical, peekByteOffset)
 import           Codec.CBOR.Encoding (encodeWord)
 import           Universum
 
-import           Pos.Binary.Class (Bi (..), DecoderAttr (..), DecoderAttrKind (..),
+import           Pos.Binary.Class (Bi (..), BiExtRep (..), DecoderAttr (..), DecoderAttrKind (..),
                                    decodeListLenCanonicalOf, encodeListLen,
-                                   enforceSize)
+                                   enforceSize, defaultDecodeWithOffsets, spliceExtRep')
 import           Pos.Binary.Core.Block ()
 import           Pos.Binary.Core.Common ()
 import qualified Pos.Core.Block.Blockchain as T
@@ -43,6 +43,19 @@ instance ( Typeable b
         _gbhExtra     <- decode
         let _gbhDecoderAttr = DecoderAttrNone
         pure T.UnsafeGenericBlockHeader {..}
+
+instance ( Typeable b
+         , Bi (T.BHeaderHash b)
+         , Bi (T.BodyProof b)
+         , Bi (T.ConsensusData b)
+         , Bi (T.ExtraHeaderData b)
+         ) =>
+         BiExtRep (T.GenericBlockHeader b) where
+    spliceExtRep bs h =
+        T.gbhDecoderAttr .~ (spliceExtRep' bs $ T._gbhDecoderAttr h) $ h
+    forgetExtRep = T.gbhDecoderAttr .~ DecoderAttrNone
+    decodeWithOffsets = defaultDecodeWithOffsets T.gbhDecoderAttr
+
 
 instance ( Typeable b
          , Bi (T.BHeaderHash b)

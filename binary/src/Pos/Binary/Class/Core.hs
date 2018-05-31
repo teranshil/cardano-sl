@@ -1,14 +1,16 @@
-{-# LANGUAGE DeriveAnyClass   #-}
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies     #-}
-{-# LANGUAGE TypeOperators    #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 -- | Bi typeclass and most basic functions.
 
 module Pos.Binary.Class.Core
     ( Bi(..)
+    , BiExtRep(..)
     , encodeBinary
     , decodeBinary
     , enforceSize
@@ -32,6 +34,8 @@ module Pos.Binary.Class.Core
     -- * Utils
     , toCborError
     , cborError
+    , spliceExtRep'
+    , defaultDecodeWithOffsets
     ) where
 
 import           Universum
@@ -104,6 +108,13 @@ data DecoderAttr (attr :: DecoderAttrKind) where
   DecoderAttrOffsets :: ByteOffset -> ByteOffset -> DecoderAttr 'AttrOffsets
   DecoderAttrExtRep  :: ByteString ->               DecoderAttr 'AttrExtRep
 
+-- | Helper function useful when implementing `spliceExtRep`.
+spliceExtRep' :: ByteString -> DecoderAttr 'AttrOffsets -> DecoderAttr 'AttrExtRep
+spliceExtRep' bs (DecoderAttrOffsets n m) = DecoderAttrExtRep
+    $ BS.take (fromIntegral $ n - m)
+    $ BS.drop (fromIntegral n)
+    $ bs
+
 deriving instance Show (DecoderAttr attr)
 deriving instance Eq (DecoderAttr attr)
 deriving instance (Typeable attr) => Typeable (DecoderAttr attr)
@@ -114,6 +125,8 @@ instance NFData (DecoderAttr attr) where
 
 ----------------------------------------
 
+-- |
+-- Binary encoding / decoding based on cborg library.
 class Typeable a => Bi a where
     encode :: a -> E.Encoding
     decode :: D.Decoder s a
@@ -126,6 +139,28 @@ class Typeable a => Bi a where
 
     decodeList :: D.Decoder s [a]
     decodeList = defaultDecodeList
+
+-- |
+-- Binary ecndogin / decoding based on cborg library with decoding external
+-- representation.
+class Typeable a => BiExtRep (a :: DecoderAttrKind -> *) where
+    encodeExtRep        :: a 'AttrExtRep -> E.Encoding
+    decodeWithOffsets   :: D.Decoder s (a 'AttrOffsets)
+    spliceExtRep        :: ByteString -> a 'AttrOffsets -> a 'AttrExtRep
+    forgetExtRep        :: a 'AttrExtRep -> a 'AttrNone
+
+    default encodeExtRep :: Bi (a 'AttrNone) => a 'AttrExtRep -> E.Encoding
+    encodeExtRep = encode . forgetExtRep
+
+defaultDecodeWithOffsets
+    :: Bi (a 'AttrNone)
+    => Lens (a attr) attr
+    -> D.Decoder s (a 'AttrOffsets)
+defaultDecodeWithOffsets lns = do
+    start <- D.peekByteOffset
+    a <- decode
+    end <- D.peekByteOffset
+    return $ a ^. lens $ DecoderAttrOffests start end
 
 -- | Default @'E.Encoding'@ for list types.
 defaultEncodeList :: Bi a => [a] -> E.Encoding

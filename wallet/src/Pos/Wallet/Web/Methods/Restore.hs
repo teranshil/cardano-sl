@@ -7,6 +7,7 @@ module Pos.Wallet.Web.Methods.Restore
        , importWallet
        , restoreWalletFromSeed
        , restoreWalletFromBackup
+       , restoreExternalWallet
        , addInitialRichAccount
 
        -- For testing
@@ -26,7 +27,7 @@ import qualified Data.HashMap.Strict as HM
 import           Pos.Client.KeyStorage (addSecretKey)
 import           Pos.Core.Configuration (genesisSecretsPoor)
 import           Pos.Core.Genesis (poorSecretToEncKey)
-import           Pos.Crypto (EncryptedSecretKey, PassPhrase, emptyPassphrase, firstHardened)
+import           Pos.Crypto (EncryptedSecretKey, PassPhrase, PublicKey, emptyPassphrase, firstHardened)
 import           Pos.StateLock (Priority (..), withStateLockNoMetrics)
 import           Pos.Util (HasLens (..), maybeThrow)
 import           Pos.Util.UserSecret (UserSecretDecodingError (..), WalletUserSecret (..),
@@ -104,6 +105,18 @@ restoreWallet :: ( L.MonadWalletLogic ctx m
 restoreWallet sk = do
     db <- WS.askWalletDB
     let credentials@(_, wId) = keyToWalletDecrCredentials $ Right sk
+    Restore.restoreWallet credentials
+    WS.setWalletReady db wId True
+    L.getWallet wId
+
+-- | Restore a history related to given external wallet, using 'extPublicKey'.
+restoreExternalWallet :: ( L.MonadWalletLogic ctx m
+                         , MonadUnliftIO m
+                         , HasLens SyncQueue ctx SyncQueue
+                         ) => PublicKey -> m CWallet
+restoreExternalWallet publicKey = do
+    db <- WS.askWalletDB
+    let credentials@(_, wId) = keyToWalletDecrCredentials $ Left publicKey
     Restore.restoreWallet credentials
     WS.setWalletReady db wId True
     L.getWallet wId

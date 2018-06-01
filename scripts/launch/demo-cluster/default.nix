@@ -51,6 +51,7 @@ in pkgs.writeScript "demo-cluster" ''
   EXIT_STATUS=0
   source ${src + "/scripts/common-functions.sh"}
   LOG_TEMPLATE=${src + "/log-configs/template-demo.yaml"}
+  CONFIG_KEY=${configurationKey}
   function stop_cardano {
     trap "" INT TERM
     echo "Received TERM!"
@@ -76,8 +77,14 @@ in pkgs.writeScript "demo-cluster" ''
   # Remove previous state
   rm -rf ${stateDir}
   mkdir -p ${stateDir}
-  echo "Creating genesis keys..."
-  cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}
+
+  ${if launchGenesis then ''
+    echo "Copying genesis keys..."
+    cp -Rv ${configFiles}/genesis-keys ${stateDir}
+  '' else ''
+    echo "Creating genesis keys..."
+    cardano-keygen --system-start 0 generate-keys-by-spec --genesis-out-dir ${stateDir}/genesis-keys --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}
+  ''}
 
   echo "Generating Topology"
   gen_kademlia_topology ${builtins.toString (numCoreNodes + 1)} ${stateDir}
@@ -86,7 +93,7 @@ in pkgs.writeScript "demo-cluster" ''
   echo "Launching a demo cluster..."
   for i in {0..${builtins.toString (numCoreNodes - 1)}}
   do
-    node_args="$(node_cmd $i "" "$system_start" "${stateDir}" "" "${stateDir}/logs" "${stateDir}") --configuration-file ${configFiles}/configuration.yaml" --configuration-key ${configurationKey}
+    node_args="$(node_cmd $i "" "$system_start" "${stateDir}" "" "${stateDir}/logs" "${stateDir}") --configuration-file ${configFiles}/configuration.yaml"
     echo Launching core node $i with args: $node_args
     cardano-node-simple $node_args &> /dev/null &
     core_pid[$i]=$!
@@ -103,7 +110,7 @@ in pkgs.writeScript "demo-cluster" ''
     wallet_args=" --tlscert ${stateDir}/tls-files/server.crt --tlskey ${stateDir}/tls-files/server.key --tlsca ${stateDir}/tls-files/server.crt"
     # TODO: remove wallet-debug and use TLS when the tests support it
     wallet_args="$wallet_args --wallet-address 127.0.0.1:8090 --wallet-db-path ${stateDir}/wallet-db --wallet-debug"
-    node_args="$(node_cmd $i "$wallet_args" "$system_start" "${stateDir}" "" "${stateDir}/logs" "${stateDir}") --configuration-file ${configFiles}/configuration.yaml --configuration-key ${configurationKey}"
+    node_args="$(node_cmd $i "$wallet_args" "$system_start" "${stateDir}" "" "${stateDir}/logs" "${stateDir}") --configuration-file ${configFiles}/configuration.yaml"
     echo Running wallet with args: $node_args
     cardano-node $node_args &> /dev/null &
     wallet_pid=$!

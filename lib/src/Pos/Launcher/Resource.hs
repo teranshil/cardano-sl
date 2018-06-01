@@ -31,7 +31,7 @@ import           System.Wlog (LoggerConfig (..), WithLogger, consoleActionB, def
                               logDebug, logInfo, maybeLogsDirB, productionB, removeAllHandlers,
                               setupLogging, showTidB)
 
--- import           Network.Broadcast.OutboundQueue.Types (NodeType (..))
+import           Network.Broadcast.OutboundQueue.Types (NodeType (..))
 import           Pos.Binary ()
 import           Pos.Block.Configuration (HasBlockConfiguration)
 import           Pos.Block.Slog (mkSlogContext)
@@ -266,6 +266,10 @@ allocateNodeContext ancd txpSettings ekgStore = do
                                 , ancdEkgStore = store
                                 , ancdTxpMemState = TxpLocalData {..}
                                 } = ancd
+    logDebug $ "Dequeue policy to core:  " <> (show ((ncDequeuePolicy networkConfig) NodeCore))
+    logDebug $ "Dequeue policy to relay: " <> (show ((ncDequeuePolicy networkConfig) NodeRelay))
+    logDebug $ "Dequeue policy to edge:  " <> (show ((ncDequeuePolicy networkConfig) NodeEdge))
+
     logInfo "Allocating node context..."
     ncLoggerConfig <- getRealLoggerConfig $ bpLoggingParams npBaseParams
     logDebug "Got logger config"
@@ -301,10 +305,6 @@ allocateNodeContext ancd txpSettings ekgStore = do
     peersVar <- newTVarIO mempty
     logDebug "Created peersVar"
     mm <- initializeMisbehaviorMetrics ekgStore
-
-    -- logDebug $ "Dequeue policy to core:  " <> (show ((ncDequeuePolicy networkConfig) NodeCore))
-    -- logDebug $ "Dequeue policy to relay: " <> (show ((ncDequeuePolicy networkConfig) NodeRelay))
-    -- logDebug $ "Dequeue policy to edge:  " <> (show ((ncDequeuePolicy networkConfig) NodeEdge))
 
     logDebug "Finished allocating node context!"
     let ctx =
